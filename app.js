@@ -7,8 +7,7 @@ const passport = require('passport')
 const passportLocalMongoose = require('passport-local-mongoose')
 const nodemailer = require("nodemailer");
 const xoauth2 = require('xoauth2');
-
-
+require('./utils/redis');
 
 const app = express()
 
@@ -33,11 +32,13 @@ app.use(passport.initialize())
 app.use(passport.session())
 
 // mongoose connect and schema
-mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser : true})
+//Cambiar la url de conexion por la de la nube, en este caso yo use mongodb atlas que tiene una estructura asi mongodb+srv://User1:[Password0]@cluster0.3rrgp.mongodb.net/<dbname>?retryWrites=true&w=majority
+mongoose.connect("mongodb:local@host..", {useUnifiedTopology: true,useNewUrlParser : true})
 const userSchema = new mongoose.Schema({
     username: String,
     password: String
 })
+app.use(bodyParser.json());
 const productSchema = new mongoose.Schema({
     nombre : String,
     precio : String,
@@ -151,8 +152,8 @@ app.get('/loginperfil' , function(req,res){
 })
 
 app.get('/all/usuarios' , function(req,res){
-    Usuario.findAll().then(tiendas => {
-        res.send( JSON.stringify(tiendas, null, 4))
+    Usuario.findAll().then(tienda => {
+        res.send( JSON.stringify(tienda, null, 4))
     })
 })
 
@@ -162,6 +163,8 @@ app.get('/all/products' , function(req,res){
         res.send( JSON.stringify(products, null, 4))
     })
 })
+
+
 
 app.post('/user/crud', function(req, res){
     Usuario.findOne({
@@ -206,12 +209,32 @@ app.put('/user/crud/:id', function(req, res){
     })
 })
 
-app.get('/api/producto/all', function(req,res){
-    ProdMongo.find().then(products => {
-        res.send( JSON.stringify(products, null, 4))
-    })
+app.get('/api/producto/all', async (req,res)=>{
+	try{
+		const Prod = await ProdMongo.find().cache({ expire: 10 });
+		res.json(Prod);	
+	}
+	catch(e) {
+        res.json({error: true, message: 'Error occurred during processing'});
+    }
+    // ProdMongo.find().then(products => {
+    //      res.send( JSON.stringify(products, null, 4))
+    //  })
 })
 
+app.get('/api/usuarioss/all', async(req,res)=>{
+    try{
+	   const uss = await User.find().cache({ expire: 10 });
+	    
+	    res.json(uss);
+	}catch(e) {
+       res.json({error: true, message: 'Error occurred during processing'});
+    }
+ //    User.find().then(usuarioss => {
+	//         res.send( JSON.stringify(usuarioss, null, 4))
+	// })
+})
+//app.use('/', router);
 //tienda
 app.post('/tienda/crud', function(req, res){
 
@@ -248,9 +271,9 @@ app.get('/tienda/crud', function(req,res){
     Usuario.findOne({
         where:{mail:req.user.username}
     }).then(user =>{
-        Tienda.findAll({where :{vendedor : user.idUser}}).then(tiendas => {
-            console.log(JSON.stringify(tiendas, null, 4))
-            res.send( JSON.stringify(tiendas, null, 4))
+        Tienda.findAll({where :{vendedor : user.idUser}}).then(tienda => {
+            console.log(JSON.stringify(tienda, null, 4))
+            res.send( JSON.stringify(tienda, null, 4))
             
         })
     })
@@ -286,7 +309,7 @@ app.delete('/usuario/crud/:id', function(req, res){
     })
 })
 //Email
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1";
 const smtpTransport = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
